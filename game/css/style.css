@@ -1,0 +1,86 @@
+/* Solara Bay — HUD and menu styling. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #0c1116;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #fff; }
+#game-canvas, #game-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#hud { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+#hud.hidden { display: none; }
+
+#hud-top-left { position: absolute; top: 16px; left: 18px; }
+#hud-money { font-size: 30px; font-weight: 800; color: #7dff9a;
+  text-shadow: 2px 2px 0 #000, 0 0 8px rgba(0,0,0,.6); letter-spacing: 1px; }
+#hud-health { margin-top: 6px; width: 210px; height: 18px; background: rgba(0,0,0,.55);
+  border: 2px solid rgba(255,255,255,.75); border-radius: 4px; position: relative; overflow: hidden; }
+#hud-health-fill { height: 100%; width: 100%; background: #37d67a; transition: width .2s; }
+#hud-health-text { position: absolute; inset: 0; text-align: center; font-size: 12px;
+  font-weight: 700; line-height: 15px; text-shadow: 1px 1px 0 #000; }
+
+#hud-top-right { position: absolute; top: 14px; right: 20px; }
+#hud-stars { font-size: 30px; letter-spacing: 4px; color: #ffd700;
+  text-shadow: 2px 2px 0 #000; }
+#hud-stars.hot { color: #ff5544; animation: pulse .5s infinite alternate; }
+@keyframes pulse { from { transform: scale(1); } to { transform: scale(1.08); } }
+
+#hud-top-centre { position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  text-align: center; max-width: 560px; }
+#hud-objective { font-size: 17px; font-weight: 700; background: rgba(0,0,0,.55);
+  padding: 7px 16px; border-radius: 6px; border: 1px solid rgba(255,215,0,.6);
+  text-shadow: 1px 1px 0 #000; }
+#hud-objective-dist { margin-top: 4px; font-size: 15px; font-weight: 700; color: #ffd700;
+  text-shadow: 1px 1px 0 #000; }
+#hud-timer { margin-top: 4px; font-size: 20px; font-weight: 800; color: #ff8866;
+  text-shadow: 1px 1px 0 #000; }
+
+#hud-bottom-left { position: absolute; bottom: 18px; left: 18px; }
+#hud-weapon { font-size: 15px; font-weight: 800; letter-spacing: 2px; color: #ffd700;
+  text-shadow: 1px 1px 0 #000; }
+#hud-ammo { font-size: 26px; font-weight: 800; text-shadow: 2px 2px 0 #000; }
+
+#hud-bottom-right { position: absolute; bottom: 16px; right: 16px; text-align: right; }
+#hud-speed-line { font-size: 26px; font-weight: 800; text-shadow: 2px 2px 0 #000; }
+#hud-speed-unit { font-size: 14px; }
+#hud-radio { font-size: 13px; color: #ffe9a8; text-shadow: 1px 1px 0 #000; margin-bottom: 6px; }
+#minimap { width: 180px; height: 180px; border-radius: 50%; border: 3px solid rgba(255,255,255,.8);
+  box-shadow: 0 0 0 2px rgba(0,0,0,.6), 0 4px 18px rgba(0,0,0,.5); background: #101418; }
+
+#hud-prompt { position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+  font-size: 17px; font-weight: 700; background: rgba(0,0,0,.65); padding: 8px 18px;
+  border-radius: 6px; border: 1px solid #ffd700; }
+#hud-toast { position: absolute; top: 110px; left: 50%; transform: translateX(-50%);
+  font-size: 18px; font-weight: 700; background: rgba(0,0,0,.7); padding: 9px 20px;
+  border-radius: 6px; opacity: 0; transition: opacity .3s; border: 1px solid rgba(255,255,255,.4); }
+#hud-toast.show { opacity: 1; }
+#hud-dialogue { position: absolute; bottom: 210px; left: 50%; transform: translateX(-50%);
+  max-width: 640px; background: rgba(0,0,0,.72); padding: 12px 20px; border-radius: 8px;
+  border-left: 4px solid #ffd700; font-size: 17px; line-height: 1.4; }
+#hud-dialogue b { color: #ffd700; margin-right: 8px; }
+#crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px;
+  transform: translate(-50%, -50%); }
+#crosshair::before, #crosshair::after { content: ''; position: absolute; background: #fff;
+  box-shadow: 0 0 3px #000; }
+#crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
+#crosshair::after { top: 10px; left: 0; height: 2px; width: 22px; }
+#damage-flash { position: absolute; inset: 0; background: radial-gradient(ellipse at center,
+  transparent 55%, rgba(255,0,0,.55) 100%); opacity: 0; pointer-events: none; }
+
+.overlay { position: absolute; inset: 0; z-index: 10; display: flex; align-items: center;
+  justify-content: center; background: rgba(5, 10, 18, .72); }
+.panel { max-width: 620px; width: 92%; background: linear-gradient(160deg, #16202e, #0c1420);
+  border: 2px solid #f2a541; border-radius: 14px; padding: 34px 38px; text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,.7); }
+.panel h1 { font-size: 58px; letter-spacing: 6px; color: #f2a541;
+  text-shadow: 3px 3px 0 #7a2e00, 0 0 30px rgba(242,165,65,.4); }
+.panel h2 { font-size: 40px; letter-spacing: 4px; color: #f2a541; margin-bottom: 12px; }
+.tagline { font-size: 17px; color: #9fd8e8; margin: 6px 0 16px; font-style: italic; }
+.blurb { font-size: 16px; line-height: 1.55; color: #dfe8f0; margin-bottom: 22px; }
+.panel button { display: block; width: 100%; margin: 10px 0; padding: 13px; font-size: 18px;
+  font-weight: 700; letter-spacing: 1px; color: #111; background: #f2a541; border: none;
+  border-radius: 8px; cursor: pointer; }
+.panel button:hover { background: #ffc65e; }
+#btn-continue { background: #37d67a; }
+#btn-continue:hover { background: #5ce394; }
+.controls { margin-top: 20px; text-align: left; font-size: 14px; line-height: 1.9;
+  color: #b8c8d8; border-top: 1px solid rgba(255,255,255,.15); padding-top: 14px; }
+.controls b { color: #ffd700; display: block; margin-bottom: 4px; }
+.controls span { display: block; }
+#end-text { font-size: 17px; line-height: 1.5; color: #dfe8f0; margin-bottom: 18px; }

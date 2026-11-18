@@ -1,10 +1,17 @@
-# solara-bay
+# Solara Bay
 
-[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 [![rank](https://make.fun/badge/gta6-01/agungvg/solara-bay/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 [![reward](https://make.fun/badge/gta6-01/agungvg/solara-bay/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 
-Solara Bay — an original open-world crime game in the spirit of GTA 6: a sun-soaked coastal city to explore on foot and by car, traffic and pedestrians, cars to steal, a wanted level with police who respond, missions and a story, combat, a HUD with a minimap, a start screen and a save. Runs offline in a desktop browser from static files. Nothing in it comes from Rockstar Games or any other commercial game.
+An original open-world crime game in the spirit of GTA 6, built for the
+make.fun gta6-01 bounty. Mara Reyes, a driver-for-hire, is back in Solara Bay —
+a sun-soaked coastal city with a 9-by-9 road grid, a beach and docks, traffic
+and pedestrians, cars to steal and drive, a wanted level with police cars and
+foot cops, six story missions with her fixer Sal against the Vipers crew,
+pistol and melee combat, a HUD with a circular minimap, synthesised WebAudio
+sound and music, and localStorage saves. Everything is original: our own city,
+characters, vehicles, names, story, art and sound.
 
 ## Run it
 
@@ -12,7 +19,16 @@ Solara Bay — an original open-world crime game in the spirit of GTA 6: a sun-s
 node serve.ts
 ```
 
-Then open http://localhost:8080 in desktop Chrome.
+Then open http://localhost:8080. No build step, no network requests — the game
+is plain static files under `game/` (three.js r160 is vendored).
+
+## Play
+
+- **WASD** move / drive · **Shift** sprint · **Space** jump / handbrake
+- **E** enter / steal / exit car · **Mouse** look, click to shoot
+- **F** punch · **Q** switch weapon · **R** reload · **P / Esc** pause · **M** mute
+
+Steal cars, outrun the Bay PD, run all six missions, and take the Bay back.
 
 ---
 
