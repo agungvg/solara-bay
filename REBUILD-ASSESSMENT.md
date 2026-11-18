@@ -32,7 +32,7 @@ NPCs feel ALIVE like main characters.
    crime → call the police after a delay which feeds wanted, bump reaction),
    ambient barks shown in a HUD bark line, varied bodies (height, hats,
    aprons, hi-vis vests, backpacks). Drivers honk + brake when blocked.
-   Pedestrian count 24 → 44, traffic 20 → 26.
+   Pedestrian count 24 → 45, traffic 20 → 26.
 2. **City detail** — 5 facade palettes + per-building value jitter, rooftop
    props (AC boxes, tanks, antennas), canvas-texture shop signs with original
    names, food stalls at plaza + beach bar, hydrants, bins, benches, bus stops,
@@ -49,7 +49,7 @@ NPCs feel ALIVE like main characters.
    extra Sal/Mara/Viper dialogue beats, mission roster on the start menu.
 7. **HUD** — in-game clock, mission progress (Mission 2/6), named-site labels
    + ped/gang blips on the minimap, NPC bark line, save info on Continue.
-8. **Audio** — honk, pedestrian scream, ambient city bed (distant traffic hum).
+8. **Audio** — honk, pedestrian scream.
 
 ## Must not break
 
