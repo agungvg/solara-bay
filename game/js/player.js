@@ -2,10 +2,12 @@
 // One authority controls the player at a time: onFoot or driving.
 import * as THREE from 'three';
 import { clamp, collideCircle, CITY } from './utils.js';
-import { makePerson, poseWalk, posePunch } from './characters.js';
+import { makePerson, poseWalk, posePunch, poseIdle } from './characters.js';
 
 export function createPlayer(scene, start) {
-  const mesh = makePerson({ skin: 1, shirt: 0, pants: 0, hairColor: 0x1a0f08 });
+  // Mara: same detailed makePerson as every pedestrian (real face, hands,
+  // clothing detail) — long hair + blue shirt so she reads as the lead.
+  const mesh = makePerson({ skin: 1, shirt: 0, pants: 0, hairColor: 0x1a0f08, hairStyle: 3 });
   scene.add(mesh);
   return {
     mesh, parts: mesh.userData.parts,
@@ -58,8 +60,7 @@ export function updatePlayerFoot(G, dt) {
   } else if (p.speed > 0.1) {
     poseWalk(p.parts, p.walkPhase, 1);
   } else {
-    p.parts.legL.rotation.x = 0; p.parts.legR.rotation.x = 0;
-    p.parts.armL.rotation.x = 0; p.parts.armR.rotation.x = 0;
+    poseIdle(p.parts, G.time);
   }
   if (p.punchCooldown > 0) p.punchCooldown -= dt;
   if (p.invuln > 0) p.invuln -= dt;

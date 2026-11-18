@@ -7,7 +7,10 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23f2a541'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='%23111'%3ES%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/style.css">
 <script type="importmap">
-{ "imports": { "three": "./vendor/three.module.min.js" } }
+{ "imports": {
+  "three": "./vendor/three.module.min.js",
+  "three/addons/": "./vendor/addons/"
+} }
 </script>
 </head>
 <body>
@@ -21,6 +24,10 @@
     <div id="hud-health"><div id="hud-health-fill"></div><span id="hud-health-text">100 HP</span></div>
   </div>
   <div id="hud-top-right"><div id="hud-stars">☆☆☆☆☆</div></div>
+  <div id="hud-police-units" style="display:none">
+    <div id="hud-police-units-title">BAY PD — RESPONDING UNITS</div>
+    <div id="hud-police-units-list"></div>
+  </div>
   <div id="hud-top-centre">
     <div id="hud-objective">Free roam — explore Solara Bay</div>
     <div id="hud-objective-dist"></div>
@@ -31,17 +38,22 @@
     <div id="hud-ammo">12 / 48</div>
   </div>
   <div id="hud-bottom-right">
-    <div id="hud-speed-line"><span id="hud-speed"></span> <span id="hud-speed-unit"></span></div>
-    <div id="hud-radio"></div>
+    <div id="hud-speedo">
+      <div id="hud-speed-line"><span id="hud-speed"></span> <span id="hud-speed-unit"></span></div>
+      <div id="hud-speed-bar"><div id="hud-speed-fill"></div></div>
+      <div id="hud-speed-gear"></div>
+    </div>
+    <div id="hud-radio"><span id="hud-radio-station"></span><span id="hud-radio-track"></span></div>
     <canvas id="minimap" width="180" height="180"></canvas>
   </div>
   <div id="hud-prompt" style="display:none"></div>
   <div id="hud-toast"></div>
-  <div id="hud-dialogue" style="display:none"><b id="hud-dialogue-who"></b><span id="hud-dialogue-text"></span></div>
+  <div id="hud-dialogue" style="display:none"><div id="hud-dialogue-portrait"><span id="hud-dialogue-initial">S</span></div><div id="hud-dialogue-body"><b id="hud-dialogue-who"></b><span id="hud-dialogue-text"></span></div></div>
   <div id="hud-bark" style="display:none"></div>
   <div id="mission-card" style="display:none"><h3 id="mission-card-title"></h3><p id="mission-card-body"></p></div>
   <div id="crosshair" style="display:none"></div>
   <div id="damage-flash"></div>
+  <div id="screen-grade"></div>
 </div>
 
 <!-- Start menu -->

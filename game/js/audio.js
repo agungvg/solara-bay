@@ -13,6 +13,9 @@ export class AudioEngine {
     this.musicTimer = null;
     this.musicStep = 0;
     this.noiseBuf = null;
+    this.ambientStarted = false;
+    this.ambientTimer = null;
+    this.ambientNodes = null;
   }
 
   init() {
@@ -51,6 +54,67 @@ export class AudioEngine {
     this.sirenGain.connect(this.master);
     this.sirenOsc.start();
     this.startMusic();
+  }
+
+  // Ambient city bed: all synthesised, no audio files. A looped low
+  // filtered-noise wash (distant traffic / city air) + a soft low hum,
+  // with an occasional distant siren wash drifting past. Quiet in the
+  // mix by design — it beds the scene, it never competes with dialogue.
+  // Routed through the master gain, so the M mute toggle silences it.
+  startAmbient() {
+    if (this.ambientStarted || !this.ctx) return;
+    this.ambientStarted = true;
+    // 2 s looped noise buffer, lowpassed to a city rumble.
+    const len = this.ctx.sampleRate * 2;
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) {
+      const white = Math.random() * 2 - 1;
+      last = (last + 0.02 * white) / 1.02; // brown-ish, no harsh hiss
+      data[i] = last * 3.2;
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass'; filter.frequency.value = 320; filter.Q.value = 0.4;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.045;
+    src.connect(filter); filter.connect(gain); gain.connect(this.master);
+    src.start();
+    // Low traffic hum, gently breathing.
+    const hum = this.ctx.createOscillator();
+    hum.type = 'sine'; hum.frequency.value = 52;
+    const humGain = this.ctx.createGain();
+    humGain.gain.value = 0.02;
+    const lfo = this.ctx.createOscillator();
+    lfo.type = 'sine'; lfo.frequency.value = 0.07;
+    const lfoGain = this.ctx.createGain();
+    lfoGain.gain.value = 0.008;
+    lfo.connect(lfoGain); lfoGain.connect(humGain.gain);
+    hum.connect(humGain); humGain.connect(this.master);
+    hum.start(); lfo.start();
+    this.ambientNodes = { src, hum, lfo };
+    // Distant siren wash every ~20–35 s: a quiet two-tone swell that
+    // rises, wails twice, and fades — far away, never the near siren.
+    const wash = () => {
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime + 0.1;
+      const o = this.ctx.createOscillator();
+      o.type = 'triangle'; o.frequency.value = 660;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.022, t + 1.2);
+      o.frequency.setValueAtTime(660, t + 1.2);
+      o.frequency.setValueAtTime(880, t + 2.0);
+      o.frequency.setValueAtTime(660, t + 2.8);
+      o.frequency.setValueAtTime(880, t + 3.6);
+      g.gain.linearRampToValueAtTime(0.0001, t + 5.0);
+      o.connect(g); g.connect(this.master);
+      o.start(t); o.stop(t + 5.2);
+      this.ambientTimer = setTimeout(wash, 20000 + Math.random() * 15000);
+    };
+    this.ambientTimer = setTimeout(wash, 9000 + Math.random() * 8000);
   }
 
   resume() {

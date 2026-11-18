@@ -29,21 +29,28 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-// Restrained grade: ACES filmic tone mapping, no blown-out whites.
+// Brighter, HD, clear (Lyso: the competitor read "too dim, not HD/clear"):
+// ACES filmic, exposure raised 1.05 -> 1.15, sun + hemisphere lifted so
+// the street reads bright, not murky. Fog matches the sky dome's horizon
+// (city.js owns it: 0xff9e57, 200–620) so the far skyline melts into the
+// sunset instead of greying the near street.
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.15;
 document.getElementById('game-canvas').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87b5d6);
-scene.fog = new THREE.Fog(0x9fc3dd, 220, 520);
+// Fog / background seed: city.js (buildCity) is the source of truth and
+// sets these to the sky dome's horizon colour (0xff9e57, 200–620) right
+// after this; these identical values just keep the first frames coherent.
+scene.background = new THREE.Color(0xff9e57);
+scene.fog = new THREE.Fog(0xff9e57, 200, 620);
 const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 900);
 camera.position.set(0, 8, 20);
 
 // Warm sun vs cool sky fill: the cheapest way the scene reads as designed.
-const hemi = new THREE.HemisphereLight(0xbfd9ff, 0x9a8a6a, 0.95);
+const hemi = new THREE.HemisphereLight(0xbfd9ff, 0x9a8a6a, 1.25);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xffe3b3, 1.6);
+const sun = new THREE.DirectionalLight(0xffe3b3, 2.2);
 sun.position.set(120, 180, 60);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -51,6 +58,37 @@ sun.shadow.camera.left = -280; sun.shadow.camera.right = 280;
 sun.shadow.camera.top = 280; sun.shadow.camera.bottom = -280;
 sun.shadow.camera.far = 600;
 scene.add(sun);
+
+// Post-processing (Solara Bay preset: bloom 0.7 / 0.5 / 0.85 + OutputPass).
+// The vendored three r160 does NOT ship the composer, so the r160 addon
+// modules are vendored locally under game/vendor/addons/ and loaded here
+// with a dynamic import: if anything in the chain fails, the game falls
+// back to renderer-level grading above instead of failing to load.
+let composer = null;
+try {
+  const { EffectComposer } = await import('three/addons/postprocessing/EffectComposer.js');
+  const { RenderPass } = await import('three/addons/postprocessing/RenderPass.js');
+  const { UnrealBloomPass } = await import('three/addons/postprocessing/UnrealBloomPass.js');
+  const { OutputPass } = await import('three/addons/postprocessing/OutputPass.js');
+  composer = new EffectComposer(renderer,
+    new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+      type: THREE.HalfFloatType, // HDR bloom + no sky-gradient banding
+      samples: 4,                // MSAA on the composer's buffers
+    }));
+  composer.setSize(window.innerWidth, window.innerHeight);
+  composer.addPass(new RenderPass(scene, camera));
+  composer.addPass(new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0.7,  // strength — neon glow without washing the street
+    0.5,  // radius
+    0.85, // threshold — only HDR-bright pixels bloom
+  ));
+  composer.addPass(new OutputPass()); // LAST: tone mapping + sRGB, once
+} catch (err) {
+  // Fallback: renderer-level grading carries the look; the game must load.
+  composer = null;
+}
+window.__bloomActive = !!composer;
 
 // --- Game state -------------------------------------------------------------
 const rng = mulberry32(SEED);
@@ -92,6 +130,7 @@ const G = {
   shotTimer: 0,
   shotReady: false,
   framesRendered: 0,
+  closeupPed: null, // ?shot=closeup: the ped the camera frames, not the player
 };
 G.player = createPlayer(scene, { x: NAMED.garage.x - 6, z: NAMED.garage.z + 24 });
 G.traffic = createTraffic(scene, rng, city.colliders);
@@ -248,7 +287,7 @@ function newGame() {
   G.state = 'playing';
   G.hud.menu.style.display = 'none';
   G.hud.endOverlay.style.display = 'none';
-  G.audio.init(); G.audio.resume();
+  G.audio.init(); G.audio.resume(); G.audio.startAmbient();
   startMission(G, 0);
 }
 
@@ -268,7 +307,7 @@ function continueGame() {
   clearPolice(G);
   G.state = 'playing';
   G.hud.menu.style.display = 'none';
-  G.audio.init(); G.audio.resume();
+  G.audio.init(); G.audio.resume(); G.audio.startAmbient();
   const idx = Math.min(data.missionIndex, 5);
   if (data.missionState === 'complete') {
     G.missions.state = 'complete';
@@ -359,8 +398,14 @@ refreshMenu();
 const camTarget = new THREE.Vector3();
 function updateCamera(dt) {
   const p = G.player;
+  // Close-up shot: frame a pedestrian's face + hands, not the player.
+  const isCloseup = G.shotMode === 'closeup' && G.closeupPed && !G.closeupPed.dead;
   let px, pz, py;
-  if (p.mode === 'car' && p.car) {
+  if (isCloseup) {
+    px = G.closeupPed.x; pz = G.closeupPed.z; py = 1.55;
+    camera.fov = 50; // mild telephoto: head + shoulders + hands, not a full body
+    camera.updateProjectionMatrix();
+  } else if (p.mode === 'car' && p.car) {
     px = p.car.x; pz = p.car.z; py = 1.6;
     // Chase camera: behind the car, FOV widens with speed.
     const speedRatio = Math.abs(p.car.speed) / (p.car.topSpeed || 32);
@@ -373,7 +418,7 @@ function updateCamera(dt) {
     camera.fov = 62;
     camera.updateProjectionMatrix();
   }
-  const dist = p.mode === 'car' ? 10.5 : 5.5;
+  const dist = isCloseup ? 1.9 : (G.shotCamDist || (p.mode === 'car' ? 10.5 : 5.5));
   const cp = Math.cos(G.camPitch), sp = Math.sin(G.camPitch);
   const dx = Math.sin(G.camYaw) * cp * dist;
   const dz = Math.cos(G.camYaw) * cp * dist;
@@ -391,6 +436,11 @@ function updateCamera(dt) {
   const cx = px + dx * t, cz = pz + dz * t;
   const cy = Math.max(0.6, py + dy * t);
   camTarget.set(px, py, pz);
+  // Shot framing: look past the player at the action ahead, so Mara drops
+  // below centre and the crosshair lands on the target instead of on her
+  // head (the old mission shot had the crosshair sitting on her skull).
+  // The close-up frames a face, so it keeps its own target.
+  if (G.shotMode && !isCloseup) camTarget.y += 0.7;
   // In shot mode the camera snaps to its pose at once (headless capture
   // runs at low FPS, so per-frame smoothing would never converge).
   const k = G.shotMode ? 1 : 1 - Math.pow(0.0001, dt);
@@ -460,15 +510,17 @@ function applyShotPreset() {
   showHud();
   G.state = 'playing';
   G.hud.menu.style.display = 'none';
-  G.audio.init();
+  G.audio.init(); G.audio.startAmbient();
   if (shot === 'start') {
     // On foot at Solara Plaza, in the middle of the living city: the taco
     // stall and its shopkeeper, a pair of locals mid-conversation, a
     // jogger and sitters on the fountain edge, parked cars ahead.
-    // Player stands ON the open plaza (no buildings there), facing the stall.
-    G.player.x = -10; G.player.z = -12;
-    G.player.heading = 0.83;
-    G.camYaw = Math.PI + 0.83; G.camPitch = 0.2;
+    // Player stands ON the open plaza, close enough to the talkers (6, 6)
+    // that faces read (~13 m) instead of 25 m away as in pass 1.
+    G.shotCamDist = 4.5;
+    G.player.x = 2; G.player.z = -6;
+    G.player.heading = 0.64;
+    G.camYaw = Math.PI + 0.64; G.camPitch = 0.15;
     G.player.mesh.position.set(G.player.x, 0, G.player.z);
     startMission(G, 0);
   } else if (shot === 'play') {
@@ -479,6 +531,22 @@ function applyShotPreset() {
       enterCar(G, car);
       G.camYaw = car.heading + Math.PI;
       G.keys.KeyW = true; // keep driving through the shot
+      // Traffic directly ahead: moving cars ~20 m and ~55 m east of the
+      // player on the same road (z = 58), same heading, slower — so the
+      // driving screenshot shows traffic ahead instead of an empty street.
+      // Two cars: the player outruns the first quickly, the second keeps
+      // the road populated ahead for a later capture too.
+      const aheadSpots = [[-96, 12], [-60, 14]];
+      let spotIdx = 0;
+      for (const c of G.traffic) {
+        if (spotIdx >= aheadSpots.length) break;
+        if (c.driver !== 'ai' || c.dead || c.missionCar || c === car) continue;
+        const [ax, spd] = aheadSpots[spotIdx++];
+        c.x = ax; c.z = 58; c.heading = Math.PI / 2;
+        c.axis = 'x'; c.dir = 1; c.speed = spd; c.target = 116;
+        c.mesh.position.set(c.x, 0, c.z);
+        c.mesh.rotation.y = c.heading;
+      }
     }
     startMission(G, 0);
     // Don't let mission 1 auto-complete just because Mara is already in
@@ -510,19 +578,82 @@ function applyShotPreset() {
     G.missions.objective = 'Lose the cops — survive the heat';
   } else if (shot === 'mission') {
     // The Exchange shootout at the docks, pistol out, gang in the open.
+    // TIGHT framing (Lyso: the old shot read as block figures at 8–15 m):
+    // camera 3.6 m behind Mara instead of 5.5, look-target lifted so she
+    // drops below centre and the crosshair lands on the gang, not her head.
+    G.shotCamDist = 3.6;
     G.player.x = NAMED.docks.x - 6; G.player.z = NAMED.docks.z - 12;
     G.player.heading = 0.1;
-    G.camYaw = Math.PI - 0.1; G.camPitch = 0.24;
+    G.camYaw = Math.PI - 0.1; G.camPitch = 0.12;
     G.player.mesh.position.set(G.player.x, 0, G.player.z);
     G.weapon = 'pistol';
     startMission(G, 4);
     // Stand inside the arrival radius so the mission's own step logic
     // spawns the four gang members through its normal path, then step
-    // back a little so all four are in frame.
+    // back a little so all four are in frame. (Gang AI turns them to
+    // face Mara every tick, so we see faces, not backs.)
     updateMissions(G, 0.01);
     G.player.x = NAMED.docks.x - 8; G.player.z = NAMED.docks.z - 18;
     G.player.heading = 0.2;
-    G.camYaw = Math.PI - 0.2; G.camPitch = 0.18;
+    G.camYaw = Math.PI - 0.2; G.camPitch = 0.12;
+    G.player.mesh.position.set(G.player.x, 0, G.player.z);
+    // BRIGHT car in frame: the magenta mission sports car, pulled in
+    // behind the gang, nose toward the camera so headlights + paint read.
+    // Never a black car on black asphalt again.
+    const magenta = G.traffic.find((c) => c.missionCar);
+    if (magenta) {
+      magenta.x = -18; magenta.z = 264; magenta.heading = Math.PI;
+      magenta.mesh.position.set(-18, 0, 264);
+      magenta.mesh.rotation.y = magenta.heading;
+    }
+    // Push any other AI car out of the dock-yard frame so no stray black
+    // car wanders into the shootout.
+    for (const c of G.traffic) {
+      if (c.driver !== 'ai' || c.dead || c === magenta) continue;
+      if (Math.abs(c.x) < 70 && c.z > 225) {
+        c.x = 116; c.z = 58; c.heading = Math.PI / 2;
+        c.axis = 'x'; c.dir = 1; c.speed = 12; c.target = 174;
+        c.mesh.position.set(c.x, 0, c.z);
+        c.mesh.rotation.y = c.heading;
+      }
+    }
+  } else if (shot === 'closeup') {
+    // Character close-up (review only, never a dossier screenshot):
+    // a walker in the OPEN, held in a talk gesture — face (eyes/nose/
+    // lips/brows/hair) + both gesturing hands in frame at 1.9 m with a
+    // mild telephoto, three-quarter view.
+    // (The plaza shopkeeper stands INSIDE the stall collider, so the
+    // collision-aware camera clamped to ~0.5 m and the face filled the
+    // frame; a walker in the open has a clear camera segment.)
+    G.camYaw = 0.6; G.camPitch = -0.3; // mostly level, slight top-down so the gesturing hands stay in frame
+    // Prefer the fairest-skinned walker (eyes/brows read best on light
+    // skin) with a clear camera segment; fall back to any living ped.
+    let ped = null;
+    let bestSkin = -1;
+    for (const q of G.peds) {
+      if (q.archetype !== 'walker' || q.dead) continue;
+      const cx = q.x + Math.sin(G.camYaw) * 1.9;
+      const cz = q.z + Math.cos(G.camYaw) * 1.9;
+      if (segmentBlocked(q.x, q.z, cx, cz, G.city.colliders)) continue;
+      const c = q.parts.head.material.color;
+      const lum = 0.3 * c.r + 0.6 * c.g + 0.1 * c.b;
+      if (lum > bestSkin) { bestSkin = lum; ped = q; }
+    }
+    ped = ped || G.peds.find((q) => !q.dead) || G.peds[0];
+    G.closeupPed = ped;
+    // 'work' = poseTalk: both arms gesturing, hands up near the chest
+    // where the frame can see them (idle hangs them at the sides, out
+    // of a head-and-shoulders frame). Non-workers never leave 'work'.
+    ped.state = 'work';
+    ped.stateTimer = 3600; // hold the pose for the whole capture
+    ped.dest = null;
+    // Camera sits south-east of the ped; the ped faces ~35° off the lens
+    // for a three-quarter face view instead of flat dead-on.
+    ped.heading = G.camYaw - 0.55;
+    ped.mesh.rotation.y = ped.heading;
+    // Park the player behind the camera so Mara is not in frame.
+    G.player.x = ped.x + Math.sin(G.camYaw) * 7;
+    G.player.z = ped.z + Math.cos(G.camYaw) * 7;
     G.player.mesh.position.set(G.player.x, 0, G.player.z);
   }
   G.hud.menu.style.display = 'none';
@@ -548,7 +679,8 @@ function frame(now) {
     updateHud(G);
     drawMinimap(G);
   }
-  renderer.render(scene, camera);
+  if (composer) composer.render();
+  else renderer.render(scene, camera);
   G.framesRendered += 1;
 }
 requestAnimationFrame(frame);
@@ -557,4 +689,5 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  if (composer) composer.setSize(window.innerWidth, window.innerHeight);
 });

@@ -21,6 +21,15 @@ export function createHud() {
     dialogue: $('hud-dialogue'),
     dialogueWho: $('hud-dialogue-who'),
     dialogueText: $('hud-dialogue-text'),
+    dialoguePortrait: $('hud-dialogue-portrait'),
+    dialogueInitial: $('hud-dialogue-initial'),
+    policeUnits: $('hud-police-units'),
+    policeUnitsList: $('hud-police-units-list'),
+    speedo: $('hud-speedo'),
+    speedFill: $('hud-speed-fill'),
+    speedGear: $('hud-speed-gear'),
+    radioStation: $('hud-radio-station'),
+    radioTrack: $('hud-radio-track'),
     damageFlash: $('damage-flash'),
     crosshair: $('crosshair'),
     bark: $('hud-bark'),
@@ -83,11 +92,17 @@ export function updateHud(G) {
     const kmh = Math.round(Math.abs(p.car.speed) * 3.6);
     hud.speed.textContent = kmh;
     hud.speedUnit.textContent = 'km/h';
-    hud.radio.textContent = '♪ BAY FM 98.4 — Solara Sunset Drive';
+    if (hud.speedo) hud.speedo.style.display = 'block';
+    if (hud.speedFill) hud.speedFill.style.width = Math.min(100, Math.round(kmh / 180 * 100)) + '%';
+    if (hud.speedGear) hud.speedGear.textContent = p.car.speed < -0.5 ? 'GEAR R' : p.car.speed > 0.5 ? 'GEAR D' : 'GEAR N';
+    if (hud.radioStation) hud.radioStation.textContent = '♪ BAY FM 98.4';
+    if (hud.radioTrack) hud.radioTrack.textContent = 'Solara Sunset Drive';
+    if (hud.radio) hud.radio.style.display = 'block';
   } else {
     hud.speed.textContent = '';
     hud.speedUnit.textContent = '';
-    hud.radio.textContent = '';
+    if (hud.speedo) hud.speedo.style.display = 'none';
+    if (hud.radio) hud.radio.style.display = 'none';
   }
   // Interaction prompt.
   if (G.nearCar && p.mode === 'foot' && G.state === 'playing') {
@@ -99,17 +114,60 @@ export function updateHud(G) {
   } else {
     hud.prompt.style.display = 'none';
   }
-  // Dialogue bar (story characters).
+  // Dialogue bar (story characters) with a portrait: initial + per-speaker
+  // colour so the player learns who is talking without reading the name.
   if (G.dialogue && G.dialogue.ttl > 0) {
-    hud.dialogue.style.display = 'block';
+    hud.dialogue.style.display = 'flex';
     hud.dialogueWho.textContent = G.dialogue.who;
     hud.dialogueText.textContent = G.dialogue.text;
+    if (hud.dialogueInitial) hud.dialogueInitial.textContent = (G.dialogue.who || '?')[0].toUpperCase();
+    if (hud.dialoguePortrait) {
+      const who = (G.dialogue.who || '').toLowerCase();
+      hud.dialoguePortrait.className = who === 'mara' ? 'speaker-mara' : who === 'sal' ? 'speaker-sal' : '';
+    }
   } else {
     hud.dialogue.style.display = 'none';
   }
+  // Police-unit list (left edge, only while wanted): named units with a
+  // live status, read from the real police cars — never invented positions.
+  // Callsigns are display labels only; the cars/distances are real.
+  if (hud.policeUnits && hud.policeUnitsList) {
+    const level = G.wanted.level;
+    if (level >= 1) {
+      hud.policeUnits.style.display = 'block';
+      const px = p.mode === 'car' && p.car ? p.car.x : p.x;
+      const pz = p.mode === 'car' && p.car ? p.car.z : p.z;
+      const callsigns = ['UNIT 7 — INTERCEPTOR', 'UNIT 12 — CRUISER', 'UNIT 3 — PURSUIT', 'UNIT 21 — K-9'];
+      const rows = [];
+      const alive = G.policeCars.filter((c) => !c.dead).slice(0, 4);
+      alive.forEach((car, i) => {
+        const d = Math.round(dist2(car.x, car.z, px, pz));
+        const status = d < 60 ? 'PURSUIT' : d > 130 ? 'SEARCH' : 'PURSUIT';
+        const cls = d < 60 ? 'pursuit' : d > 130 ? 'search' : 'pursuit';
+        rows.push({ name: callsigns[i % callsigns.length], status, cls, dist: d + ' m' });
+      });
+      if (G.roadblock) rows.push({ name: 'ROADBLOCK — BAY PD', status: 'ROADBLOCK', cls: 'roadblock', dist: 'ahead' });
+      if (rows.length === 0) rows.push({ name: 'UNIT 7 — INTERCEPTOR', status: 'RESPONDING', cls: 'respond', dist: '—' });
+      hud.policeUnitsList.innerHTML = '';
+      for (const r of rows.slice(0, 4)) {
+        const row = document.createElement('div');
+        row.className = 'hud-unit-row';
+        const n = document.createElement('span'); n.className = 'u-name'; n.textContent = r.name;
+        const s = document.createElement('span'); s.className = 'u-status ' + r.cls; s.textContent = r.status;
+        const d = document.createElement('span'); d.className = 'u-dist'; d.textContent = r.dist;
+        row.appendChild(n); row.appendChild(s); row.appendChild(d);
+        hud.policeUnitsList.appendChild(row);
+      }
+    } else {
+      hud.policeUnits.style.display = 'none';
+    }
+  }
   // NPC bark line (the city talking back — pedestrians, drivers, witnesses).
+  // GATED: barks are suppressed while wanted >= 2 — a shopkeeper hawking
+  // fish mid-chase reads as incongruous. The bark data is untouched; only
+  // the display is gated.
   if (hud.bark) {
-    if (G.bark && G.bark.ttl > 0 && !(G.dialogue && G.dialogue.ttl > 0)) {
+    if (G.bark && G.bark.ttl > 0 && !(G.dialogue && G.dialogue.ttl > 0) && G.wanted.level < 2) {
       hud.bark.style.display = 'block';
       hud.bark.innerHTML = '';
       const b = document.createElement('b');

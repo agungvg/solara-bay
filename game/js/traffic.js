@@ -52,11 +52,15 @@ export function createTraffic(scene, rng, colliders) {
   magenta.driver = null;
   magenta.missionCar = true;
   cars.push(magenta);
-  // Moving traffic on the grid.
+  // Moving traffic on the grid. Never spawn on road 0: the x=0 / z=0
+  // roads run through Solara Plaza, which the bollards + planters close
+  // (city.js) — a car spawned on road 0 would drive straight through
+  // the square. `along` may still be 0 (an intersection outside the plaza).
+  const NON_PLAZA_ROADS = CITY.roads.filter((r) => r !== 0);
   for (let i = 0; i < 26; i++) {
     const type = TRAFFIC_TYPES[Math.floor(rng() * TRAFFIC_TYPES.length)];
     const horizontal = rng() < 0.5;
-    const road = CITY.roads[Math.floor(rng() * CITY.roads.length)];
+    const road = NON_PLAZA_ROADS[Math.floor(rng() * NON_PLAZA_ROADS.length)];
     const along = CITY.roads[Math.floor(rng() * CITY.roads.length)];
     const dir = rng() < 0.5 ? 1 : -1;
     const x = horizontal ? along : road;
@@ -119,12 +123,22 @@ export function updateTraffic(G, dt) {
     car.x += Math.sin(car.heading) * car.speed * dt;
     car.z += Math.cos(car.heading) * car.speed * dt;
     // Reached the target intersection: random turn or straight on.
+    // PLAZA FIX (AI traffic only — police pursuit steering is untouched):
+    // the plaza entries are closed by bollards, so a traffic car must
+    // never turn ONTO road 0 (the cross road here is `along`), and a car
+    // already on road 0 turns OFF at the first intersection outside the
+    // square. At the centre intersection itself (along == 0) there is no
+    // non-plaza road to turn onto, so the car goes straight and turns off
+    // at the next intersection instead.
     const along = car.axis === 'x' ? car.x : car.z;
     const arrived = car.dir > 0 ? along >= car.target : along <= car.target;
     if (arrived) {
       const road = car.axis === 'x' ? car.z : car.x;
-      const roll = rng();
-      if (roll < 0.3) {
+      const onPlazaRoad = car.driver === 'ai' && Math.abs(road) < 1;
+      const turnRoadIsPlaza = car.driver === 'ai' && Math.abs(along) < 1;
+      let roll = rng();
+      if (onPlazaRoad && !turnRoadIsPlaza) roll = 0; // force the turn off road 0
+      if (roll < 0.3 && !turnRoadIsPlaza) {
         // Turn left or right onto the cross road.
         const turn = rng() < 0.5 ? 1 : -1;
         const oldAxis = car.axis;

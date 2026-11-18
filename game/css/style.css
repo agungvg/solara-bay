@@ -15,7 +15,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #0c1116;
   max-width: 560px; background: rgba(20, 26, 34, .78); padding: 9px 16px; border-radius: 8px;
   border-left: 4px solid #9fd8e8; font-size: 15px; line-height: 1.35; font-style: italic; }
 #hud-bark b { color: #9fd8e8; margin-right: 8px; font-style: normal; }
-#mission-card { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+#mission-card { position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%);
   width: min(560px, 88%); background: linear-gradient(160deg, rgba(22,32,46,.94), rgba(12,20,32,.94));
   border: 2px solid #f2a541; border-radius: 12px; padding: 24px 28px; text-align: center;
   box-shadow: 0 20px 60px rgba(0,0,0,.7); }
@@ -28,6 +28,20 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #0c1116;
   font-weight: 700; line-height: 15px; text-shadow: 1px 1px 0 #000; }
 
 #hud-top-right { position: absolute; top: 14px; right: 20px; }
+#hud-police-units { position: absolute; top: 108px; right: 20px; width: 330px;
+  background: rgba(10, 14, 22, .78); border: 1px solid rgba(255, 68, 68, .55);
+  border-left: 4px solid #ff4444; border-radius: 8px; padding: 8px 10px; }
+#hud-police-units-title { font-size: 11px; font-weight: 800; letter-spacing: 2px;
+  color: #ff8a80; margin-bottom: 5px; text-shadow: 1px 1px 0 #000; }
+.hud-unit-row { display: flex; justify-content: space-between; gap: 8px;
+  font-size: 13px; font-weight: 700; line-height: 1.5; text-shadow: 1px 1px 0 #000; }
+.hud-unit-row .u-name { color: #dfe8f0; white-space: nowrap; }
+.hud-unit-row .u-status { font-weight: 800; letter-spacing: 1px; white-space: nowrap; flex-shrink: 0; }
+.hud-unit-row .u-status.pursuit { color: #ff5544; }
+.hud-unit-row .u-status.search { color: #ffb020; }
+.hud-unit-row .u-status.respond { color: #6ec8ff; }
+.hud-unit-row .u-status.roadblock { color: #ff2e88; }
+.hud-unit-row .u-dist { color: #9fb4c8; font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; }
 #hud-stars { font-size: 30px; letter-spacing: 4px; color: #ffd700;
   text-shadow: 2px 2px 0 #000; }
 #hud-stars.hot { color: #ff5544; animation: pulse .5s infinite alternate; }
@@ -49,9 +63,21 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #0c1116;
 #hud-ammo { font-size: 26px; font-weight: 800; text-shadow: 2px 2px 0 #000; }
 
 #hud-bottom-right { position: absolute; bottom: 16px; right: 16px; text-align: right; }
-#hud-speed-line { font-size: 26px; font-weight: 800; text-shadow: 2px 2px 0 #000; }
+#hud-speedo { background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.35);
+  border-radius: 8px; padding: 6px 12px 8px; margin-bottom: 6px; min-width: 190px; }
+#hud-speed-line { font-size: 30px; font-weight: 800; text-shadow: 2px 2px 0 #000;
+  font-variant-numeric: tabular-nums; line-height: 1.05; }
 #hud-speed-unit { font-size: 14px; }
-#hud-radio { font-size: 13px; color: #ffe9a8; text-shadow: 1px 1px 0 #000; margin-bottom: 6px; }
+#hud-speed-bar { height: 6px; background: rgba(255,255,255,.22); border-radius: 3px;
+  margin-top: 5px; overflow: hidden; }
+#hud-speed-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #37d67a, #ffd700 65%, #ff5544);
+  transition: width .12s linear; }
+#hud-speed-gear { font-size: 12px; font-weight: 800; letter-spacing: 2px; color: #9fd8e8;
+  text-shadow: 1px 1px 0 #000; margin-top: 3px; }
+#hud-radio { font-size: 13px; color: #ffe9a8; text-shadow: 1px 1px 0 #000; margin-bottom: 6px;
+  background: rgba(0,0,0,.45); border-radius: 6px; padding: 4px 10px; }
+#hud-radio-station { font-weight: 800; letter-spacing: 1px; color: #ffd700; }
+#hud-radio-track { display: block; font-style: italic; color: #ffe9a8; }
 #minimap { width: 180px; height: 180px; border-radius: 50%; border: 3px solid rgba(255,255,255,.8);
   box-shadow: 0 0 0 2px rgba(0,0,0,.6), 0 4px 18px rgba(0,0,0,.5); background: #101418; }
 
@@ -63,9 +89,18 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #0c1116;
   border-radius: 6px; opacity: 0; transition: opacity .3s; border: 1px solid rgba(255,255,255,.4); }
 #hud-toast.show { opacity: 1; }
 #hud-dialogue { position: absolute; bottom: 210px; left: 50%; transform: translateX(-50%);
-  max-width: 640px; background: rgba(0,0,0,.72); padding: 12px 20px; border-radius: 8px;
-  border-left: 4px solid #ffd700; font-size: 17px; line-height: 1.4; }
+  max-width: 640px; background: rgba(0,0,0,.72); padding: 12px 20px 12px 12px; border-radius: 8px;
+  border-left: 4px solid #ffd700; font-size: 17px; line-height: 1.4;
+  display: flex; gap: 14px; align-items: center; }
 #hud-dialogue b { color: #ffd700; margin-right: 8px; }
+#hud-dialogue-portrait { flex: 0 0 52px; width: 52px; height: 52px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; font-weight: 800; color: #fff; text-shadow: 1px 1px 0 #000;
+  border: 2px solid rgba(255,255,255,.75); box-shadow: 0 0 12px rgba(242,165,65,.45);
+  background: linear-gradient(160deg, #3a7bd5, #1a2a5a); }
+#hud-dialogue-portrait.speaker-mara { background: linear-gradient(160deg, #e87a2e, #7a2e00); }
+#hud-dialogue-portrait.speaker-sal { background: linear-gradient(160deg, #3aa655, #123a1e); }
+#hud-dialogue-body { min-width: 0; }
 #crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px;
   transform: translate(-50%, -50%); }
 #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #fff;
@@ -74,6 +109,16 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #0c1116;
 #crosshair::after { top: 10px; left: 0; height: 2px; width: 22px; }
 #damage-flash { position: absolute; inset: 0; background: radial-gradient(ellipse at center,
   transparent 55%, rgba(255,0,0,.55) 100%); opacity: 0; pointer-events: none; }
+/* Warm sunset grade + gentle vignette over the 3D view only (DOM HUD sits
+   above it in paint order within #hud, so text stays crisp). Subtle on
+   purpose: it focuses the eye, it never crushes the corners to grey. */
+#screen-grade { position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 62%, rgba(10, 6, 24, .28) 100%),
+    linear-gradient(180deg, rgba(255, 170, 90, .05) 0%, transparent 30%, transparent 75%, rgba(255, 120, 60, .06) 100%); }
+#hud > *:not(#screen-grade) { position: absolute; z-index: 1; }
+#hud-top-left, #hud-top-right, #hud-top-centre, #hud-bottom-left,
+#hud-bottom-right, #hud-police-units { z-index: 1; }
 
 .overlay { position: absolute; inset: 0; z-index: 10; display: flex; align-items: center;
   justify-content: center; background: rgba(5, 10, 18, .72); }
