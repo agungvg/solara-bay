@@ -1,7 +1,7 @@
 // police.js — wanted level state machine, police cars that chase and ram,
 // foot cops that chase, punch and arrest. Wanted decays when quiet.
 import * as THREE from 'three';
-import { clamp, dist2, mulberry32 } from './utils.js';
+import { clamp, dist2, mulberry32, nearestRoad } from './utils.js';
 import { makeCarEntity } from './traffic.js';
 import { makePerson, poseWalk, posePunch } from './characters.js';
 import { damagePlayer } from './traffic.js';
@@ -57,6 +57,51 @@ export function updateWanted(G, dt) {
     G.copCooldown = 3;
   }
   if (G.copCooldown > 0) G.copCooldown -= dt;
+  // Roadblocks at 4 stars and up: the Bay PD seals the road ahead.
+  if (w.level >= 4 && !G.roadblock) spawnRoadblock(G);
+  if (w.level < 3 && G.roadblock) clearRoadblock(G);
+}
+
+// At 4+ stars the police park two cruisers across the road ahead of the
+// player, nose to nose, and hold the line until the heat drops.
+function spawnRoadblock(G) {
+  const p = G.player;
+  const px = p.mode === 'car' && p.car ? p.car.x : p.x;
+  const pz = p.mode === 'car' && p.car ? p.car.z : p.z;
+  // Nearest road ahead of the player, in the direction they're facing.
+  const heading = p.mode === 'car' && p.car ? p.car.heading : p.heading;
+  const ax = px + Math.sin(heading) * 45;
+  const az = pz + Math.cos(heading) * 45;
+  const roadX = nearestRoad(ax), roadZ = nearestRoad(az);
+  const horizontal = Math.abs(ax - roadX) < Math.abs(az - roadZ);
+  const bx = horizontal ? roadX : px;
+  const bz = horizontal ? pz : roadZ;
+  const cars = [];
+  for (const off of [-4, 4]) {
+    // Parked side by side ACROSS the road (offset along the road's
+    // cross-axis), nose to nose, so the lanes are sealed.
+    const car = makeCarEntity(G.scene, 'police', 0,
+      horizontal ? bx : bx + off,
+      horizontal ? bz + off : bz,
+      horizontal ? 0 : Math.PI / 2);
+    car.driver = 'none'; // parked: holds the line, never chases
+    car.roadblock = true;
+    car.topSpeed = 0;
+    G.traffic.push(car);
+    cars.push(car);
+  }
+  G.roadblock = cars;
+  G.toast('ROADBLOCK AHEAD — the Bay PD sealed the road!');
+  G.audio.sirenBurst();
+}
+function clearRoadblock(G) {
+  if (!G.roadblock) return;
+  for (const car of G.roadblock) {
+    G.scene.remove(car.mesh);
+    const i = G.traffic.indexOf(car);
+    if (i >= 0) G.traffic.splice(i, 1);
+  }
+  G.roadblock = null;
 }
 
 function spawnPoliceCar(G) {
@@ -100,11 +145,16 @@ export function updatePolice(G, dt) {
   const p = G.player;
   const px = p.mode === 'car' && p.car ? p.car.x : p.x;
   const pz = p.mode === 'car' && p.car ? p.car.z : p.z;
-  // Police cars: steer toward the player, ram on contact.
+  // Police cars: steer toward the player, ram on contact. If the player
+  // is far away they search the last known position instead of beelining
+  // across the whole map (leash + search, not omniscience).
   for (const car of G.policeCars) {
-    if (car.dead) continue;
+    if (car.dead || car.roadblock) continue;
     const d = dist2(car.x, car.z, px, pz);
-    const wantHeading = Math.atan2(px - car.x, pz - car.z);
+    if (d < 60) { G.wanted.lastKnown = { x: px, z: pz }; }
+    const tx = d > 130 && G.wanted.lastKnown ? G.wanted.lastKnown.x : px;
+    const tz = d > 130 && G.wanted.lastKnown ? G.wanted.lastKnown.z : pz;
+    const wantHeading = Math.atan2(tx - car.x, tz - car.z);
     let dh = wantHeading - car.heading;
     while (dh > Math.PI) dh -= Math.PI * 2;
     while (dh < -Math.PI) dh += Math.PI * 2;
@@ -186,4 +236,5 @@ export function clearPolice(G) {
   G.policeCars = [];
   for (const cop of G.footCops) G.scene.remove(cop.mesh);
   G.footCops = [];
+  clearRoadblock(G);
 }

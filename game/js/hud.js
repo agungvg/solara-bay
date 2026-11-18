@@ -23,6 +23,11 @@ export function createHud() {
     dialogueText: $('hud-dialogue-text'),
     damageFlash: $('damage-flash'),
     crosshair: $('crosshair'),
+    bark: $('hud-bark'),
+    missionCard: $('mission-card'),
+    missionCardTitle: $('mission-card-title'),
+    missionCardBody: $('mission-card-body'),
+    clock: $('hud-clock'),
     minimap: $('minimap'),
     menu: $('menu'),
     pauseMenu: $('pause-menu'),
@@ -44,6 +49,13 @@ export function updateHud(G) {
   const hud = G.hud;
   const p = G.player;
   hud.money.textContent = '$' + G.money.toLocaleString('en-US');
+  // In-game clock: a Solara Bay day runs from the 08:32 start.
+  if (hud.clock) {
+    const mins = Math.floor(G.clockMin) % (24 * 60);
+    const hh = String(Math.floor(mins / 60)).padStart(2, '0');
+    const mm = String(mins % 60).padStart(2, '0');
+    hud.clock.textContent = `${hh}:${mm}  ·  Solara Bay`;
+  }
   hud.healthBar.style.width = Math.max(0, p.health) + '%';
   hud.healthBar.style.background = p.health > 50 ? '#37d67a' : p.health > 25 ? '#ffb020' : '#ff4444';
   hud.healthText.textContent = Math.ceil(Math.max(0, p.health)) + ' HP';
@@ -51,7 +63,7 @@ export function updateHud(G) {
   hud.stars.classList.toggle('hot', G.wanted.level >= 3);
   const m = G.missions;
   if (m.state === 'active' && m.objective) {
-    hud.objective.textContent = `Mission ${m.index + 1} — ${m.objective}`;
+    hud.objective.textContent = `Mission ${m.index + 1}/6 — ${m.objective}`;
     if (m.target) {
       const pos = p.mode === 'car' && p.car ? { x: p.car.x, z: p.car.z } : { x: p.x, z: p.z };
       const d = Math.round(dist2(pos.x, pos.z, m.target.x, m.target.z));
@@ -87,13 +99,36 @@ export function updateHud(G) {
   } else {
     hud.prompt.style.display = 'none';
   }
-  // Dialogue bar.
+  // Dialogue bar (story characters).
   if (G.dialogue && G.dialogue.ttl > 0) {
     hud.dialogue.style.display = 'block';
     hud.dialogueWho.textContent = G.dialogue.who;
     hud.dialogueText.textContent = G.dialogue.text;
   } else {
     hud.dialogue.style.display = 'none';
+  }
+  // NPC bark line (the city talking back — pedestrians, drivers, witnesses).
+  if (hud.bark) {
+    if (G.bark && G.bark.ttl > 0 && !(G.dialogue && G.dialogue.ttl > 0)) {
+      hud.bark.style.display = 'block';
+      hud.bark.innerHTML = '';
+      const b = document.createElement('b');
+      b.textContent = G.bark.who;
+      hud.bark.appendChild(b);
+      hud.bark.appendChild(document.createTextNode(G.bark.text));
+    } else {
+      hud.bark.style.display = 'none';
+    }
+  }
+  // Mission intro / outro card.
+  if (hud.missionCard) {
+    if (G.missionCard && G.missionCard.ttl > 0) {
+      hud.missionCard.style.display = 'block';
+      hud.missionCardTitle.textContent = G.missionCard.title;
+      hud.missionCardBody.textContent = G.missionCard.body;
+    } else {
+      hud.missionCard.style.display = 'none';
+    }
   }
   // Damage flash.
   hud.damageFlash.style.opacity = G.hudFlash > 0 ? String(Math.min(0.7, G.hudFlash)) : '0';
@@ -132,6 +167,29 @@ export function drawMinimap(G) {
   // Plaza marker (small gold square, no text to collide with pins).
   ctx.fillStyle = '#ffd700';
   ctx.fillRect(toMap(-2) - 2, toMap(-2) - 2, 4, 4);
+  // Named-site labels (tiny, so the map reads as a place, not a grid).
+  ctx.fillStyle = '#9fd8e8';
+  ctx.font = 'bold 7px sans-serif';
+  ctx.textAlign = 'center';
+  const labels = [
+    [NAMED.plaza, 'PLAZA'], [NAMED.docks, 'DOCKS'], [NAMED.garage, 'GARAGE'],
+    [NAMED.police, 'BAY PD'], [NAMED.hospital, 'HOSPITAL'], [NAMED.beachBar, 'TIDE BAR'],
+  ];
+  for (const [site, label] of labels) {
+    ctx.fillText(label, toMap(site.x), toMap(site.z) - 6);
+  }
+  // Pedestrian dots (pale) — the city is inhabited, even on the map.
+  ctx.fillStyle = 'rgba(230,230,220,0.85)';
+  for (const ped of G.peds) {
+    if (ped.dead) continue;
+    ctx.fillRect(toMap(ped.x) - 1, toMap(ped.z) - 1, 2, 2);
+  }
+  // Gang dots (magenta) during the Exchange.
+  ctx.fillStyle = '#ff2e88';
+  for (const g of G.gang) {
+    if (g.dead) continue;
+    ctx.beginPath(); ctx.arc(toMap(g.x), toMap(g.z), 3, 0, Math.PI * 2); ctx.fill();
+  }
   // Traffic dots.
   ctx.fillStyle = '#cccccc';
   for (const car of G.traffic) {

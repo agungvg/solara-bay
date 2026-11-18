@@ -9,6 +9,18 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #0c1116;
 #hud-top-left { position: absolute; top: 16px; left: 18px; }
 #hud-money { font-size: 30px; font-weight: 800; color: #7dff9a;
   text-shadow: 2px 2px 0 #000, 0 0 8px rgba(0,0,0,.6); letter-spacing: 1px; }
+#hud-clock { font-size: 14px; font-weight: 700; color: #ffe9a8; letter-spacing: 1px;
+  text-shadow: 1px 1px 0 #000; margin-top: 2px; }
+#hud-bark { position: absolute; bottom: 168px; left: 50%; transform: translateX(-50%);
+  max-width: 560px; background: rgba(20, 26, 34, .78); padding: 9px 16px; border-radius: 8px;
+  border-left: 4px solid #9fd8e8; font-size: 15px; line-height: 1.35; font-style: italic; }
+#hud-bark b { color: #9fd8e8; margin-right: 8px; font-style: normal; }
+#mission-card { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(560px, 88%); background: linear-gradient(160deg, rgba(22,32,46,.94), rgba(12,20,32,.94));
+  border: 2px solid #f2a541; border-radius: 12px; padding: 24px 28px; text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,.7); }
+#mission-card h3 { font-size: 26px; letter-spacing: 3px; color: #f2a541; margin-bottom: 10px; }
+#mission-card p { font-size: 16px; line-height: 1.55; color: #dfe8f0; }
 #hud-health { margin-top: 6px; width: 210px; height: 18px; background: rgba(0,0,0,.55);
   border: 2px solid rgba(255,255,255,.75); border-radius: 4px; position: relative; overflow: hidden; }
 #hud-health-fill { height: 100%; width: 100%; background: #37d67a; transition: width .2s; }
@@ -81,6 +93,11 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #0c1116;
 #btn-continue:hover { background: #5ce394; }
 .controls { margin-top: 20px; text-align: left; font-size: 14px; line-height: 1.9;
   color: #b8c8d8; border-top: 1px solid rgba(255,255,255,.15); padding-top: 14px; }
+.roster { margin-top: 16px; text-align: left; font-size: 14px; line-height: 1.85;
+  color: #dfe8f0; border-top: 1px solid rgba(255,255,255,.15); padding-top: 12px; }
+.roster b { color: #ffd700; display: block; margin-bottom: 4px; }
+.roster span { display: block; }
+.roster i { float: right; font-style: normal; color: #7dff9a; font-weight: 700; }
 .controls b { color: #ffd700; display: block; margin-bottom: 4px; }
 .controls span { display: block; }
 #end-text { font-size: 17px; line-height: 1.5; color: #dfe8f0; margin-bottom: 18px; }

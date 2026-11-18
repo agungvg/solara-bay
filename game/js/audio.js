@@ -121,6 +121,25 @@ export class AudioEngine {
   }
 
   gunshot() { this.noiseBurst(0.16, 0.5, 3000); this.blip(160, 0.08, 'square', 0.15); }
+  honk() {
+    // Two-tone car horn.
+    this.blip(370, 0.16, 'square', 0.22);
+    setTimeout(() => this.blip(466, 0.2, 'square', 0.22), 140);
+  }
+  scream() {
+    // Pedestrian scream: high sawtooth falling fast, quiet in the mix.
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(880, t);
+    o.frequency.exponentialRampToValueAtTime(320, t + 0.4);
+    g.gain.setValueAtTime(0.1, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + 0.5);
+  }
   gunshotFar() { this.noiseBurst(0.12, 0.15, 1800); }
   punch() { this.noiseBurst(0.08, 0.3, 500); }
   thud() { this.blip(70, 0.15, 'sine', 0.35); }

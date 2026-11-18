@@ -13,6 +13,18 @@ pistol and melee combat, a HUD with a circular minimap, synthesised WebAudio
 sound and music, and localStorage saves. Everything is original: our own city,
 characters, vehicles, names, story, art and sound.
 
+The city is alive: 45 pedestrians with jobs and routines — joggers on the
+plaza loop, tourists gawping at the beach, hi-vis dock workers, shopkeepers
+hawking tacos and fish at their stalls, pairs of locals deep in conversation,
+sitters watching the world go by. They walk the sidewalks, cross at
+intersections, hurry out of the way of traffic, flee gunfire with their hands
+up, complain when you bump into them, and call the cops when they see you
+commit a crime. Drivers honk and brake when you block the road. At four
+stars the Bay PD seals the road ahead with a roadblock; at five they hunt
+in numbers. Each mission opens with a story card — Mara's return, the
+magenta sportscar, the beach pickup, the heat wave, the docks exchange,
+the final Bay Run — and pays out in cash.
+
 ## Run it
 
 ```sh

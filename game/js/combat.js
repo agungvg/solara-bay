@@ -2,7 +2,7 @@
 // melee punch, tracers and impact flashes. Never raycasts render meshes.
 import * as THREE from 'three';
 import { dist2, segmentBlocked } from './utils.js';
-import { damageCar, damagePlayer } from './traffic.js';
+import { damageCar, damagePlayer, witnessCrime } from './traffic.js';
 import { addCrime } from './police.js';
 
 const PISTOL_DAMAGE = 34;
@@ -57,9 +57,10 @@ export function shoot(G) {
   spawnImpact(G, hitPoint);
   if (!best) return { kind: 'miss', point: hitPoint };
   if (best.kind === 'ped') {
-    best.obj.dead = true; best.obj.mesh.visible = false;
+    best.obj.dead = true; best.obj.mesh.visible = false; if (best.obj.marker) best.obj.marker.visible = false;
     addCrime(G, 1, 'Pedestrian shot');
     G.toast('Pedestrian down — the cops noticed');
+    witnessCrime(G, best.obj.x, best.obj.z); // nearby NPCs saw it — they call it in
   } else if (best.kind === 'cop') {
     best.obj.dead = true; best.obj.mesh.visible = false;
     addCrime(G, 2, 'Officer shot');
@@ -141,8 +142,9 @@ export function punch(G) {
     const d = Math.hypot(dx, dz);
     if (d < 2.2 && (dx * fx + dz * fz) / Math.max(d, 0.01) > 0.3) {
       if (t.kind === 'ped') {
-        t.obj.dead = true; t.obj.mesh.visible = false;
+        t.obj.dead = true; t.obj.mesh.visible = false; if (t.obj.marker) t.obj.marker.visible = false;
         addCrime(G, 1, 'Pedestrian punched');
+        witnessCrime(G, t.obj.x, t.obj.z); // nearby NPCs saw it
       } else if (t.kind === 'cop') {
         addCrime(G, 2, 'Officer punched');
         damagePlayer(G, 0); // no self damage; cop retaliates via its own AI

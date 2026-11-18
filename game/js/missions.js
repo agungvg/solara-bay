@@ -15,6 +15,35 @@ export const MISSION_DEFS = [
   { name: 'Bay Run', reward: 3000 },
 ];
 
+// Story text for the mission intro/outro cards (shown full-screen on start
+// and on completion). Original story: Mara Reyes vs the Vipers crew.
+export const MISSION_STORY = [
+  {
+    intro: 'Three years away. One phone call from Sal. Mara Reyes drives back into Solara Bay at dawn — the garage is hers again, the rent is due, and the Vipers have been running her streets while she was gone.',
+    outro: 'The garage lights are on again. Mara is home.',
+  },
+  {
+    intro: "Sal's buyer wants a magenta sportscar, and it happens to be sitting at the South Docks with the keys in it. Steal it. Bring it home. Try not to start a war doing it.",
+    outro: 'The buyer pays cash, no questions. Sal is already spending his cut.',
+  },
+  {
+    intro: "A package is waiting on the beach by the umbrellas. Sal won't say what's in it. Grab it, bring it back to the plaza — and do it fast, before the Vipers' lookout spots you.",
+    outro: "The package is safe. Sal finally smiles — whatever's inside, it's worth more than the Bay.",
+  },
+  {
+    intro: 'The Vipers tipped off the cops. Three stars and climbing. Survive the heat for 75 seconds, then disappear — lay low until the Bay forgets your face.',
+    outro: 'The heat fades. Mara melts back into the city like she was never there.',
+  },
+  {
+    intro: 'The Vipers want their case back. Meet them at the docks, keep the case, and make sure all four of them understand the deal is off.',
+    outro: "Four Vipers down, the case in her hands. The crew won't forget this.",
+  },
+  {
+    intro: 'One last run across the Bay. Three checkpoints, the whole city between them, and the cops already on you. Finish this, and Solara Bay is yours.',
+    outro: 'The Bay is hers. Every street, every corner, every sunset over the water.',
+  },
+];
+
 export function createMissions(G) {
   const beacon = new THREE.Mesh(
     new THREE.CylinderGeometry(1.0, 1.0, 60, 12, 1, true),
@@ -111,6 +140,11 @@ export function startMission(G, index) {
     G.wanted.quietTimer = -20;
   }
   G.toast(`Mission ${index + 1}: ${MISSION_DEFS[index].name} — $${MISSION_DEFS[index].reward}`);
+  G.missionCard = {
+    title: `MISSION ${index + 1} — ${MISSION_DEFS[index].name}`,
+    body: MISSION_STORY[index].intro,
+    ttl: 6.5,
+  };
   G.audio.missionStart();
 }
 
@@ -120,6 +154,11 @@ function completeMission(G) {
   G.money += def.reward;
   G.toast(`Mission complete: ${def.name} +$${def.reward}`);
   say(G, 'Sal', `Nice work, Mara. $${def.reward} is yours.`, 4);
+  G.missionCard = {
+    title: `${def.name} — COMPLETE  +$${def.reward}`,
+    body: MISSION_STORY[m.index].outro,
+    ttl: 5,
+  };
   G.audio.missionComplete();
   m.state = 'done';
   m.beacon.visible = false;
@@ -243,6 +282,10 @@ export function updateMissions(G, dt) {
         const next = m.checkpoints[m.checkpointIndex];
         setTarget(G, next.x, next.z, `Bay Run: reach checkpoint ${m.checkpointIndex + 1} of 3 (in a car)`);
         G.toast(`Checkpoint ${m.checkpointIndex} of 3!`);
+        say(G, 'Sal', m.checkpointIndex === 1
+          ? 'One down! The cops are calling it in — keep moving!'
+          : 'Last one, Mara. The whole Bay is watching. Drive!',
+        4);
         G.audio.checkpoint();
       }
     } else if (G.player.mode !== 'car') {

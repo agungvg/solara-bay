@@ -7,6 +7,7 @@ export function saveGameData(G) {
     money: G.money,
     missionIndex: G.missions.state === 'complete' ? 6 : G.missions.index,
     missionState: G.missions.state,
+    clockMin: G.clockMin,
     health: Math.max(1, Math.round(p.health)),
     ammo: { mag: G.ammo.mag, reserve: G.ammo.reserve },
     x: p.mode === 'car' && p.car ? p.car.x : p.x,

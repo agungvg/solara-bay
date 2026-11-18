@@ -6,10 +6,10 @@ import * as THREE from 'three';
 import { CITY, NAMED, clamp, dist2, mulberry32, segmentBlocked, angleLerp } from './utils.js';
 import { buildCity } from './city.js';
 import { createPlayer, updatePlayerFoot, updatePlayerCar, enterCar, exitCar } from './player.js';
-import { createTraffic, createPedestrians, updateTraffic, updatePedestrians, updateCarDamage, createPickups, updatePickups, damagePlayer, makeCarEntity } from './traffic.js';
+import { createTraffic, createPedestrians, updateTraffic, updatePedestrians, updateCarDamage, createPickups, updatePickups, damagePlayer, makeCarEntity, witnessCrime } from './traffic.js';
 import { createWanted, addCrime, updateWanted, updatePolice, clearPolice } from './police.js';
 import { shoot, punch, updateEffects } from './combat.js';
-import { createMissions, startMission, updateMissions, onStealMagenta } from './missions.js';
+import { createMissions, startMission, updateMissions, onStealMagenta, MISSION_DEFS } from './missions.js';
 import { createHud, updateHud, drawMinimap, showToast } from './hud.js';
 import { AudioEngine } from './audio.js';
 import { saveGameData, loadGameData, hasSave } from './save.js';
@@ -29,6 +29,9 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// Restrained grade: ACES filmic tone mapping, no blown-out whites.
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
 document.getElementById('game-canvas').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -37,9 +40,10 @@ scene.fog = new THREE.Fog(0x9fc3dd, 220, 520);
 const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 900);
 camera.position.set(0, 8, 20);
 
-const hemi = new THREE.HemisphereLight(0xcfe8ff, 0x8a7a5a, 0.95);
+// Warm sun vs cool sky fill: the cheapest way the scene reads as designed.
+const hemi = new THREE.HemisphereLight(0xbfd9ff, 0x9a8a6a, 0.95);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff2d0, 1.6);
+const sun = new THREE.DirectionalLight(0xffe3b3, 1.6);
 sun.position.set(120, 180, 60);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -76,6 +80,10 @@ const G = {
   events: [],
   effects: [],
   dialogue: null,
+  bark: null,          // NPC bark line {who, text, ttl}
+  missionCard: null,   // mission intro/outro card {title, body, ttl}
+  clockMin: 8 * 60 + 32, // in-game clock, starts 08:32
+  roadblock: null,     // police roadblock cars at wanted >= 4
   hudFlash: 0,
   gunshotFlash: 0,
   spawnCooldown: 0,
@@ -92,6 +100,9 @@ G.pickups = createPickups(scene);
 G.missions = createMissions(G);
 G.toast = (t) => showToast(G.hud, t);
 G.saveGame = () => { if (saveGameData(G)) G.toast('Game saved'); };
+// traffic.js needs addCrime but cannot import police.js (cycle:
+// police imports traffic). Wire it here instead.
+G.addCrime = (n, reason) => addCrime(G, n, reason);
 G.damagePlayer = (n) => damagePlayer(G, n);
 window.__game = G;
 
@@ -196,8 +207,14 @@ function tryEnterExitCar() {
   if (car.driver === 'ai') {
     // Steal: the driver bails out and flees on foot.
     const ped = {
-      mesh: null, parts: null, x: car.x + 2, z: car.z + 2, heading: 0,
-      speed: 4.5, phase: 0, flee: 1, dead: false, horizontal: false, road: 0,
+      mesh: null, parts: null, marker: null,
+      name: 'Driver', archetype: 'walker',
+      x: car.x + 2, z: car.z + 2, heading: 0,
+      speed: 4.5, baseSpeed: 4.5, phase: 0,
+      state: 'flee', fleeTimer: 4, dest: null, stateTimer: 0,
+      witnessTimer: 0, witnessCooldown: 0, barkCooldown: 0, bumpCooldown: 0,
+      partner: null, anchor: { x: car.x + 2, z: car.z + 2 },
+      dead: false, horizontal: false, road: 0,
     };
     const mesh = makePerson({ skin: 1, shirt: 3, pants: 0 });
     mesh.position.set(ped.x, 0, ped.z);
@@ -205,6 +222,7 @@ function tryEnterExitCar() {
     ped.mesh = mesh; ped.parts = mesh.userData.parts;
     G.peds.push(ped);
     addCrime(G, 1, 'Car stolen');
+    witnessCrime(G, car.x, car.z); // bystanders saw the theft — they call it in
     if (car.missionCar) onStealMagenta(G);
     G.toast('You stole the car!');
   }
@@ -217,6 +235,7 @@ function showHud() { G.hud.menu.style.display = 'none'; document.getElementById(
 function newGame() {
   showHud();
   G.money = 200;
+  G.clockMin = 8 * 60 + 32;
   G.player.health = 100;
   G.ammo = { mag: 12, reserve: 48 };
   G.wanted.level = 0; G.wanted.quietTimer = 0;
@@ -239,6 +258,7 @@ function continueGame() {
   if (!data) { newGame(); return; }
   G.money = data.money;
   G.player.health = data.health;
+  G.clockMin = typeof data.clockMin === 'number' ? data.clockMin : 8 * 60 + 32;
   G.ammo = { mag: data.ammo.mag, reserve: data.ammo.reserve };
   G.player.x = data.x; G.player.z = data.z;
   G.player.y = 0; G.player.mode = 'foot'; G.player.car = null;
@@ -321,7 +341,17 @@ document.getElementById('btn-end-continue').addEventListener('click', () => {
   if (G.missions.state === 'active') startMission(G, G.missions.index);
 });
 function refreshMenu() {
-  document.getElementById('btn-continue').style.display = hasSave() ? 'block' : 'none';
+  const btn = document.getElementById('btn-continue');
+  const data = loadGameData();
+  if (!data) { btn.style.display = 'none'; return; }
+  btn.style.display = 'block';
+  const mission = data.missionIndex >= 6
+    ? 'Story complete'
+    : `Mission ${data.missionIndex + 1}/6 — ${MISSION_DEFS[Math.min(data.missionIndex, 5)].name}`;
+  const when = data.savedAt ? new Date(data.savedAt).toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+  }) : '';
+  btn.textContent = `Continue — ${mission} · $${data.money.toLocaleString('en-US')}${when ? ' · saved ' + when : ''}`;
 }
 refreshMenu();
 
@@ -336,14 +366,14 @@ function updateCamera(dt) {
     const speedRatio = Math.abs(p.car.speed) / (p.car.topSpeed || 32);
     const wantYaw = p.car.heading + Math.PI;
     G.camYaw = angleLerp(G.camYaw, wantYaw, 1 - Math.pow(0.001, dt));
-    camera.fov = 62 + speedRatio * 16;
+    camera.fov = 62 + speedRatio * 12;
     camera.updateProjectionMatrix();
   } else {
     px = p.x; pz = p.z; py = 1.7;
     camera.fov = 62;
     camera.updateProjectionMatrix();
   }
-  const dist = p.mode === 'car' ? 8.5 : 5.5;
+  const dist = p.mode === 'car' ? 10.5 : 5.5;
   const cp = Math.cos(G.camPitch), sp = Math.sin(G.camPitch);
   const dx = Math.sin(G.camYaw) * cp * dist;
   const dz = Math.cos(G.camYaw) * cp * dist;
@@ -386,6 +416,10 @@ function processEvents() {
 function tick(dt) {
   G.time += dt;
   G.tick += 1;
+  // In-game clock: one game minute every 2 real seconds.
+  G.clockMin += dt * 0.5;
+  if (G.bark && G.bark.ttl > 0) G.bark.ttl -= dt;
+  if (G.missionCard && G.missionCard.ttl > 0) G.missionCard.ttl -= dt;
   if (G.state !== 'playing') return;
   readInput();
   const p = G.player;
@@ -428,10 +462,13 @@ function applyShotPreset() {
   G.hud.menu.style.display = 'none';
   G.audio.init();
   if (shot === 'start') {
-    // On foot near the garage, parked cars and the beach ahead.
-    G.player.x = NAMED.garage.x - 4; G.player.z = NAMED.garage.z + 26;
-    G.player.heading = 0.15;
-    G.camYaw = Math.PI + 0.15; G.camPitch = 0.18;
+    // On foot at Solara Plaza, in the middle of the living city: the taco
+    // stall and its shopkeeper, a pair of locals mid-conversation, a
+    // jogger and sitters on the fountain edge, parked cars ahead.
+    // Player stands ON the open plaza (no buildings there), facing the stall.
+    G.player.x = -10; G.player.z = -12;
+    G.player.heading = 0.83;
+    G.camYaw = Math.PI + 0.83; G.camPitch = 0.2;
     G.player.mesh.position.set(G.player.x, 0, G.player.z);
     startMission(G, 0);
   } else if (shot === 'play') {
@@ -444,6 +481,9 @@ function applyShotPreset() {
       G.keys.KeyW = true; // keep driving through the shot
     }
     startMission(G, 0);
+    // Don't let mission 1 auto-complete just because Mara is already in
+    // a car (that would chain a second intro card into the shot).
+    G.missions.step = 3;
     G.missions.objective = 'Cruise downtown — the Bay is open';
   } else if (shot === 'chase') {
     // Wanted 3, three police cars chasing, driving fast downtown.
@@ -455,7 +495,7 @@ function applyShotPreset() {
       G.camYaw = car.heading + Math.PI;
       G.keys.KeyW = true; // keep the chase fast through the shot
     }
-    G.wanted.level = 3;
+    G.wanted.level = 3; // 3 stars: a hard chase (roadblocks come at 4 stars in free play)
     G.wanted.quietTimer = -60;
     const spots = [[-14, 26], [14, 24], [0, 32]];
     for (let i = 0; i < 3; i++) {

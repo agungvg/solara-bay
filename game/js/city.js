@@ -80,9 +80,15 @@ function makeFacadeTexture(rng, variant) {
     ['#d8c9a8', '#2e3d55', '#f2d98c'],
     ['#b8c4cc', '#24344a', '#ffe9a8'],
     ['#c9a58e', '#31404f', '#ffe9a8'],
+    ['#a8b8a0', '#2a3542', '#fff2c0'], // sage green block
+    ['#d8a8a0', '#3a2e3e', '#ffe9a8'], // terracotta block
   ];
   const [base, win, lit] = palettes[variant % palettes.length];
   g.fillStyle = base; g.fillRect(0, 0, 256, 256);
+  // Per-facade value jitter: no two buildings share the exact tone.
+  const jit = 0.9 + rng() * 0.2;
+  g.fillStyle = `rgba(${jit > 1 ? '255,255,255' : '0,0,0'},${Math.abs(jit - 1) * 0.5})`;
+  g.fillRect(0, 0, 256, 256);
   // Subtle vertical shading.
   const grad = g.createLinearGradient(0, 0, 256, 0);
   grad.addColorStop(0, 'rgba(0,0,0,0.18)');
@@ -139,16 +145,41 @@ export function buildCity(scene, seed) {
   ocean2.position.set(0, -0.2, CITY.oceanZ + 2);
   group.add(ocean2);
 
-  // Facade materials (3 variants, shared).
-  const facades = [0, 1, 2].map((v) => new THREE.MeshLambertMaterial({
-    map: makeFacadeTexture(rng, v),
+  // Facade materials (5 variants, shared).
+  const facades = [0, 1, 2, 3, 4].map((v) => new THREE.MeshStandardMaterial({
+    map: makeFacadeTexture(rng, v), roughness: 0.9, metalness: 0.0,
   }));
-  const roofMat = new THREE.MeshLambertMaterial({ color: 0x6b6258 });
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x6b6258, roughness: 0.95 });
   const grassMat = new THREE.MeshLambertMaterial({ color: 0x5da24a });
   const trunkMat = new THREE.MeshLambertMaterial({ color: 0x7a5a38 });
   const palmMat = new THREE.MeshLambertMaterial({ color: 0x3f9e4d });
   const lampMat = new THREE.MeshLambertMaterial({ color: 0x2c2f36 });
   const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfff2b0 });
+
+  // Canvas-texture shop sign: original names only, no Rockstar material.
+  function makeSignTexture(text, bg, fg) {
+    const cv = document.createElement('canvas');
+    cv.width = 512; cv.height = 128;
+    const g = cv.getContext('2d');
+    g.fillStyle = bg; g.fillRect(0, 0, 512, 128);
+    g.strokeStyle = fg; g.lineWidth = 6; g.strokeRect(6, 6, 500, 116);
+    g.fillStyle = fg;
+    g.font = 'bold 56px sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, 256, 66);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+  function addSign(text, bg, fg, x, y, z, w, rotY = 0) {
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, w / 4),
+      new THREE.MeshBasicMaterial({ map: makeSignTexture(text, bg, fg) }),
+    );
+    m.position.set(x, y, z);
+    m.rotation.y = rotY;
+    group.add(m);
+  }
 
   const boxGeo = new THREE.BoxGeometry(1, 1, 1);
   function addBuilding(x, z, w, d, h, mat) {
@@ -158,9 +189,28 @@ export function buildCity(scene, seed) {
     m.castShadow = true; m.receiveShadow = true;
     group.add(m);
     const roof = new THREE.Mesh(boxGeo, roofMat);
-    roof.scale.set(w + 0.6, 0.5, d + 0.6);
+    roof.scale.set(w, +0.6, d + 0.6);
     roof.position.set(x, h + 0.25, z);
     group.add(roof);
+    // Rooftop clutter: AC boxes, water tanks, antennas — buildings read
+    // as used, not extruded.
+    if (h > 12 && rng() < 0.7) {
+      const ac = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0x9a9a92 }));
+      ac.scale.set(2.2, 1.0, 1.6);
+      ac.position.set(x + (rng() - 0.5) * (w - 3), h + 1.0, z + (rng() - 0.5) * (d - 3));
+      group.add(ac);
+    }
+    if (h > 20 && rng() < 0.45) {
+      const tank = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 2.6, 10),
+        new THREE.MeshLambertMaterial({ color: 0x8a6a4a }));
+      tank.position.set(x + (rng() - 0.5) * (w - 4), h + 1.8, z + (rng() - 0.5) * (d - 4));
+      group.add(tank);
+    }
+    if (rng() < 0.3) {
+      const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 4, 5), lampMat);
+      ant.position.set(x + (rng() - 0.5) * (w - 2), h + 2.5, z + (rng() - 0.5) * (d - 2));
+      group.add(ant);
+    }
     colliders.push({ x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, h });
     return m;
   }
@@ -188,18 +238,22 @@ export function buildCity(scene, seed) {
         const x = bx + (rng() - 0.5) * (40 - w);
         const z = bz + (rng() - 0.5) * (40 - d);
         const h = 7 + rng() * rng() * (maxH - 7);
-        addBuilding(x, z, w, d, h, facades[Math.floor(rng() * 3)]);
+        addBuilding(x, z, w, d, h, facades[Math.floor(rng() * 5)]);
       }
     }
   }
 
-  // Named buildings (distinct colours, low and wide).
-  const policeMat = new THREE.MeshLambertMaterial({ color: 0x4a6fa5 });
-  const hospMat = new THREE.MeshLambertMaterial({ color: 0xe8e4da });
-  const garageMat = new THREE.MeshLambertMaterial({ color: 0xc96a3a });
+  // Named buildings (distinct colours, low and wide) + their signs.
+  const policeMat = new THREE.MeshStandardMaterial({ color: 0x4a6fa5, roughness: 0.85 });
+  const hospMat = new THREE.MeshStandardMaterial({ color: 0xe8e4da, roughness: 0.85 });
+  const garageMat = new THREE.MeshStandardMaterial({ color: 0xc96a3a, roughness: 0.85 });
   addBuilding(NAMED.police.x, NAMED.police.z, 30, 18, 12, policeMat);
   addBuilding(NAMED.hospital.x, NAMED.hospital.z, 32, 20, 16, hospMat);
   addBuilding(NAMED.garage.x, NAMED.garage.z, 26, 16, 9, garageMat);
+  addSign('BAY POLICE HQ', '#1a2a5a', '#ffffff', NAMED.police.x, 9.5, NAMED.police.z + 9.3, 18);
+  addSign('SOLARA GENERAL', '#e8e4da', '#2a6a4a', NAMED.hospital.x, 12.5, NAMED.hospital.z + 10.3, 20);
+  addSign("SAL'S GARAGE", '#c96a3a', '#ffffff', NAMED.garage.x, 7.2, NAMED.garage.z + 8.3, 16);
+  addSign('PIER 9', '#2a4a5a', '#ffd700', NAMED.docks.x, 6, NAMED.docks.z - 6, 10);
   // Docks: wooden pier + crates.
   const pierMat = new THREE.MeshLambertMaterial({ color: 0x8a6b45 });
   const pier = new THREE.Mesh(boxGeo, pierMat);
@@ -286,6 +340,113 @@ export function buildCity(scene, seed) {
       b.position.set(lx, 6.1, lz);
       group.add(b);
       colliders.push({ x0: lx - 0.5, x1: lx + 0.5, z0: lz - 0.5, z1: lz + 0.5, h: 6 });
+    }
+  }
+
+  // Street props: hydrants, bins, benches, bus stops — the small things
+  // that make a street read as a street in a screenshot.
+  const hydrantMat = new THREE.MeshLambertMaterial({ color: 0xd53a3a });
+  const binMat = new THREE.MeshLambertMaterial({ color: 0x2e5d3a });
+  const benchMat = new THREE.MeshLambertMaterial({ color: 0x6a4a2a });
+  const hydGeo = new THREE.CylinderGeometry(0.28, 0.34, 0.9, 8);
+  const binGeo = new THREE.CylinderGeometry(0.4, 0.36, 0.9, 8);
+  for (let k = 0; k < 26; k++) {
+    const road = CITY.roads[Math.floor(rng() * CITY.roads.length)];
+    const along = -220 + rng() * 440;
+    const hx = rng() < 0.5 ? road + 10.5 : along;
+    const hz = rng() < 0.5 ? along : road + 10.5;
+    if (rng() < 0.5) {
+      const h = new THREE.Mesh(hydGeo, hydrantMat);
+      h.position.set(hx, 0.45, hz);
+      group.add(h);
+    } else {
+      const b = new THREE.Mesh(binGeo, binMat);
+      b.position.set(hx, 0.45, hz);
+      group.add(b);
+    }
+  }
+  // Benches around the plaza and parks.
+  for (const [bx, bz] of [[10, 10], [-12, -6], [6, -14], [-116, 50], [116, -50], [58, 166]]) {
+    const bench = new THREE.Mesh(boxGeo, benchMat);
+    bench.scale.set(2.4, 0.18, 0.7);
+    bench.position.set(bx, 0.5, bz);
+    group.add(bench);
+    for (const lx of [-1, 1]) {
+      const leg = new THREE.Mesh(boxGeo, lampMat);
+      leg.scale.set(0.12, 0.5, 0.6);
+      leg.position.set(bx + lx, 0.25, bz);
+      group.add(leg);
+    }
+  }
+  // Food stalls: counter + striped awning, at the plaza and the beach bar.
+  // (Shopkeeper NPCs stand behind these — see traffic.js.)
+  function addStall(x, z, awningColor, signText) {
+    const counter = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0x8a6a45 }));
+    counter.scale.set(4, 1.1, 1.6);
+    counter.position.set(x, 0.55, z);
+    counter.castShadow = true;
+    group.add(counter);
+    const awning = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: awningColor }));
+    awning.scale.set(4.6, 0.25, 2.4);
+    awning.position.set(x, 2.6, z);
+    awning.rotation.x = 0.18;
+    group.add(awning);
+    for (const [px, pz] of [[-2.1, -1], [2.1, -1], [-2.1, 1], [2.1, 1]]) {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.6, 5), lampMat);
+      pole.position.set(x + px, 1.3, z + pz);
+      group.add(pole);
+    }
+    addSign(signText, '#222222', '#ffd700', x, 3.4, z + 0.2, 6);
+    colliders.push({ x0: x - 2, x1: x + 2, z0: z - 0.8, z1: z + 0.8, h: 1.1 });
+  }
+  addStall(14, 10, 0xd53a3a, 'TACOS');
+  addStall(-145, 256, 0x2e8bb0, 'TIDE BAR');
+  addStall(12, 262, 0x3aa655, 'FISH');
+  // Traffic lights at the four central intersections.
+  const tlPoleMat = new THREE.MeshLambertMaterial({ color: 0x1e1e1e });
+  for (const [ix, iz] of [[0, 0], [58, 58], [-58, -58], [116, -58]]) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 5.5, 6), tlPoleMat);
+    pole.position.set(ix + 9.5, 2.75, iz + 9.5);
+    group.add(pole);
+    const head = new THREE.Mesh(boxGeo, tlPoleMat);
+    head.scale.set(0.5, 1.2, 0.4);
+    head.position.set(ix + 9.5, 5.4, iz + 9.5);
+    group.add(head);
+    const lampOn = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6),
+      new THREE.MeshBasicMaterial({ color: rng() < 0.5 ? 0x2ecc40 : 0xcc2222 }));
+    lampOn.position.set(ix + 9.5, 5.7, iz + 9.5 + 0.22);
+    group.add(lampOn);
+  }
+  // Billboards over two downtown blocks.
+  function addBillboard(x, z, text, bg, fg, rotY) {
+    const board = new THREE.Mesh(
+      new THREE.PlaneGeometry(16, 5),
+      new THREE.MeshBasicMaterial({ map: makeSignTexture(text, bg, fg) }),
+    );
+    board.position.set(x, 14, z);
+    board.rotation.y = rotY;
+    group.add(board);
+    for (const lx of [-6, 6]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 11.5, 5), tlPoleMat);
+      leg.position.set(x + lx, 5.75, z);
+      group.add(leg);
+    }
+  }
+  addBillboard(-58, 10.8, 'SOLARA SUNSET DRIVE', '#e87a2e', '#ffffff', 0);
+  addBillboard(116, -10.8, 'VISIT THE BAY', '#2e8bb0', '#ffffff', Math.PI);
+  // Shipping containers at the docks (stacked two high, same footprint).
+  const contCols = [0xb03a2e, 0x2e5cb0, 0x3aa655, 0xe8c832];
+  for (let k = 0; k < 8; k++) {
+    const c = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: contCols[k % 4] }));
+    const w = 6, d = 2.6, h = 2.6;
+    const cx = -40 + (k % 4) * 14, cz = 282;
+    const stacked = k >= 4;
+    c.scale.set(w, h, d);
+    c.position.set(cx, h / 2 + (stacked ? h : 0), cz);
+    c.castShadow = true;
+    group.add(c);
+    if (!stacked) {
+      colliders.push({ x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2, h: h * 2 });
     }
   }
 
